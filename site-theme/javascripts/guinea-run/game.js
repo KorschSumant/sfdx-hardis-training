@@ -28,6 +28,7 @@ import { createInput } from "./core/input.js";
 import { createEngine } from "./core/engine.js";
 import { createPainter, loadLogo } from "./core/painter.js";
 import { createProgress } from "./core/progress.js";
+import { installKind, rememberedInstalled } from "./core/install.js";
 import { createSound } from "./core/sound.js";
 import { seededRandom } from "./core/random.js";
 import { WORLDS, BONUSES, bonusOf, judgePlan, modeOf } from "./core/story.js";
@@ -83,6 +84,8 @@ function createGame(options) {
   const startAt = Number(params.get("guinea-at")) || 0;
   // A run a check can steer is never signed, so it never reaches the Hall of Fame
   const testMode = testHooks || seedParam !== null || startAt > 0;
+  // The home screen app is offered once a visit (installHint)
+  let installOffered = false;
 
   // The Cloudity logo, the badges and the labs are the site's own files
   const logoUrl = new URL("../../images/cloudity-text-logo-white.svg", options.base).href;
@@ -156,6 +159,8 @@ function createGame(options) {
     }
   });
   listen(window, "blur", pause);
+  // play.html: the browser offered the install late, the player answered its box, or the game got installed
+  listen(window, "guinea-run-install", refreshInstall);
 
   const disposeInput = createInput(overlay, hud.canvas, onAction, {
     tapOnDown: () => state === "playing" && Boolean(current) && String(current.module.PADS) === "jump",
@@ -246,6 +251,24 @@ function createGame(options) {
         return;
       case "map":
         showMap();
+        return;
+      case "install":
+        if (options.install) {
+          const trigger = state === "map" ? "map" : options.trigger;
+          track("easter_egg_install", { trigger });
+          if (element) {
+            element.hidden = true;
+          }
+          options.install
+            .prompt()
+            .then((outcome) => track("easter_egg_install_choice", { trigger, outcome }))
+            .catch(() => {});
+        }
+        return;
+      case "install-page":
+        // From a course page, the game page, where it installs
+        track("easter_egg_install", { trigger: state === "map" ? "map" : options.trigger, kind: "page" });
+        window.location.href = gamePageUrl();
         return;
       case "mode":
         if (state === "map" && element && element.hasAttribute("data-mode")) {
@@ -435,7 +458,8 @@ function createGame(options) {
         hud.setBadges([]);
         showMap();
       },
-      BONUSES.map((b) => ({ id: b.id, open: bonusOpen(), best: progress.bonusOf(b.id).best, hasSave: b.id === "pinball" && hasCheckpoint() }))
+      BONUSES.map((b) => ({ id: b.id, open: bonusOpen(), best: progress.bonusOf(b.id).best, hasSave: b.id === "pinball" && hasCheckpoint() })),
+      installOffer()
     );
     markMap();
   }
@@ -863,7 +887,7 @@ function createGame(options) {
     }
     track("easter_egg_world_done", { world: info.id, stars, score: run.score, mode: run.mode.id, trigger: options.trigger });
     engine.setActive(false);
-    const result = { ok: true, world: info, score: run.score, best: Math.max(before, run.score), newBest, stars, hasNext: !last, missed: missed || "", bonuses };
+    const result = { ok: true, world: info, score: run.score, best: Math.max(before, run.score), newBest, stars, hasNext: !last, missed: missed || "", bonuses, install: installHint() };
     const show = () => {
       if (last) {
         progress.setFinished();
@@ -1007,6 +1031,54 @@ function createGame(options) {
    * The invitation on the end card, once the signature and the board are in:
    * with a known handle a link straight to the issue, otherwise the Hall of Fame card.
    */
+  /**
+   * On a phone, the end card of a won world offers the home screen app, which
+   * plays offline (play.html, its manifest and sw.js). Once a visit. From a
+   * course page it opens the game page; there, an Android browser installs it
+   * at a tap, Safari and the others say where the menu entry is. Never in a
+   * frame or in the app itself (options.install is null there). The offer of
+   * the map (installOffer) does not use this visit up.
+   */
+  function installHint() {
+    if (installOffered) {
+      return null;
+    }
+    const offer = installOffer();
+    if (offer) {
+      installOffered = true;
+    }
+    return offer;
+  }
+
+  /** The offer of the map, on every map while the game is not installed. */
+  function installOffer() {
+    const offer = installKind(options.install, installDevice());
+    return offer && offer.kind === "page" ? { kind: "page", url: gamePageUrl() } : offer;
+  }
+
+  /** The install box on screen (map or end card) follows what play.html just learnt. */
+  function refreshInstall() {
+    if (state === "map" || hud.hasInstallBox()) {
+      hud.refreshInstall(installOffer());
+    }
+  }
+
+  function installDevice() {
+    return { touch: hud.touch, testMode, userAgent: navigator.userAgent, platform: navigator.platform, maxTouchPoints: navigator.maxTouchPoints, remembered: rememberedInstalled(storageOrNull()) };
+  }
+
+  function storageOrNull() {
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  }
+
+  function gamePageUrl() {
+    return new URL("play.html?lang=" + lang, options.base).href;
+  }
+
   async function inviteFor(boards) {
     const ask = ++inviteAsk;
     const shown = state;
