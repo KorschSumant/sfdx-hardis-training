@@ -10,6 +10,7 @@ a day, newest first, and a change goes under the date of the day it is made.
 - Lab 3.10: troubleshooting for a cherry-pick of US-059 that conflicts on one file only.
 - Labs 2.7 and 3.10: check that the SF Merge Driver is off before you start, since it solves the conflicts these labs teach.
 - Lab 3.11: how to stop the nightly crew capacity email in the orgs you keep.
+- Guinea Run has a second bonus, Org-Man: a maze where four admins chase the guinea pig, deployment rockets that turn them blue, faster mazes as you go, and its own Hall of Fame board. It opens with Pipeline Pinball, once the ten worlds are done.
 
 ## 2026-10-24
 
