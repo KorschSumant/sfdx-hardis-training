@@ -882,7 +882,8 @@ try {
     expect(await waitState(page, "playing"), "a game of Org-Man starts");
     await page.waitForFunction(() => window.__guineaRun && window.__guineaRun.orgman, null, { timeout: 20000 }).catch(() => {});
     const om = () => page.evaluate(() => window.__guineaRun.orgman.state());
-    expect(await settles(page, () => om().then((s) => s.phase), "play", 8000), "the maze goes from Ready to play");
+    // The software renderer of the check draws a few frames a second: Ready lasts longer than its 2.2 s of game time
+    expect(await settles(page, () => om().then((s) => s.phase), "play", 30000), "the maze goes from Ready to play");
     const start = await om();
     await page.keyboard.press("ArrowRight");
     const moved = await settles(page, () => om().then((s) => s.pig.x !== start.pig.x || s.pig.y !== start.pig.y), true, 4000);
